@@ -1,0 +1,516 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="card full-width">
+    <div class="card-header">
+        <h2>Stock Analysis</h2>
+        <p class="card-description">
+            {% if ticker %}
+                Detailed analysis for <span class="highlight">{{ ticker }}</span>
+            {% else %}
+                Search for a stock to see detailed analysis
+            {% endif %}
+        </p>
+    </div>
+    <div class="card-content">
+        {% if ticker and analysis %}
+            <div class="analysis-grid">
+                <div class="metric-card">
+                    <p class="metric-label"><i class="fas fa-chart-line"></i> Current Price</p>
+                    {% if stock_data %}
+                        {% set current_price = stock_data[-1].price if stock_data|length > 0 else 'N/A' %}
+                        <p class="metric-value">₹{{ "{:,.2f}".format(current_price) if current_price != 'N/A' else 'N/A' }}</p>
+                        {% if stock_data|length > 1 %}
+                            {% set prev_price = stock_data[-2].price %}
+                            {% set price_change = current_price - prev_price %}
+                            {% set price_change_pct = (price_change / prev_price) * 100 if prev_price else 0 %}
+                            <p class="metric-change {% if price_change >= 0 %}positive{% else %}negative{% endif %}">
+                                {{ "{:+.2f}".format(price_change) if price_change != 'N/A' else '' }} ({{ "{:+.2f}%".format(price_change_pct) if price_change_pct != 'N/A' else '' }})
+                            </p>
+                        {% endif %}
+                    {% else %}
+                        <p class="metric-value">₹N/A</p>
+                    {% endif %}
+                </div>
+                <div class="metric-card">
+                    <p class="metric-label"><i class="fas fa-robot"></i> AI Score</p>
+                    <p class="metric-value">{{ analysis.aiScore }}/100</p>
+                    <p class="metric-note">{{ analysis.recommendation }}</p>
+                </div>
+                <div class="metric-card">
+                    <p class="metric-label"><i class="fas fa-bullseye"></i> Target Price</p>
+                    <p class="metric-value">{{ analysis.targetPrice }}</p>
+                    <p class="metric-change positive">{{ analysis.potential }} potential</p>
+                </div>
+            </div>
+
+            <div class="analysis-section">
+                <h3><i class="fas fa-brain"></i> AI Analysis</h3>
+                <div class="analysis-box">
+                    <div class="comprehensive-analysis">
+                        {{ analysis.analysis|safe }}
+                    </div>
+                    <div class="analysis-footer">
+                        <p class="analysis-note">Analysis powered by Agno AI agents using Groq LLM and real-time financial data</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="analysis-section">
+                <h3><i class="fas fa-history"></i> Price History</h3>
+                <div class="chart-container">
+                    <canvas id="priceChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="analysis-section">
+                <h3><i class="fas fa-chart-bar"></i> Technical Indicators</h3>
+                <div class="indicators-grid">
+                                      
+                </div>
+            </div>
+            
+            {% if news %}
+            <div class="analysis-section">                
+            </div>
+            {% endif %}
+            
+            <div class="action-buttons">
+                {% if current_user.is_authenticated %}
+                <button class="button button-primary" id="addToWatchlistBtn" data-ticker="{{ ticker }}">
+                    <i class="fas fa-star"></i> Add to Watchlist
+                </button>
+                <button class="button button-secondary" id="addToPortfolioBtn" data-ticker="{{ ticker }}">
+                    <i class="fas fa-briefcase"></i> Add to Portfolio
+                </button>
+                {% else %}
+                <a href="{{ url_for('login') }}" class="button button-primary">
+                    <i class="fas fa-sign-in-alt"></i> Login to Track
+                </a>
+                {% endif %}
+            </div>
+            
+        {% else %}
+            <div class="empty-state">
+                <i class="fas fa-search fa-3x"></i>
+                <p>Search for a stock to see detailed analysis</p>
+                <div class="search-suggestions">
+                    <p>Try searching for popular stocks like:</p>
+                    <div class="suggestion-buttons">
+                        <a href="{{ url_for('analysis', ticker='RELIANCE.NS') }}" class="suggestion-button">Reliance</a>
+                        <a href="{{ url_for('analysis', ticker='TCS.NS') }}" class="suggestion-button">TCS</a>
+                        <a href="{{ url_for('analysis', ticker='HDFCBANK.NS') }}" class="suggestion-button">HDFC Bank</a>
+                        <a href="{{ url_for('analysis', ticker='INFY.NS') }}" class="suggestion-button">Infosys</a>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if current_user.is_authenticated %}
+<!-- Add to Portfolio Modal -->
+<div id="portfolioModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2><i class="fas fa-briefcase"></i> Add to Portfolio</h2>
+        <form id="addToPortfolioForm" class="modal-form">
+            <input type="hidden" id="portfolioTicker" name="ticker" value="{{ ticker }}">
+            
+            <div class="form-group">
+                <label for="portfolioSelect"><i class="fas fa-folder"></i> Select Portfolio:</label>
+                <select id="portfolioSelect" name="portfolio_id" required>
+                    <!-- Will be populated via JavaScript -->
+                </select>
+                <div id="noPortfoliosMessage" style="display: none; color: var(--text-light); margin-top: 0.5rem;">
+                    <p>You don't have any portfolios yet.</p>
+                    <button type="button" id="createNewPortfolioBtn" class="button button-sm button-outline" style="margin-top: 0.5rem;">
+                        <i class="fas fa-plus"></i> Create New Portfolio
+                    </button>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="quantity"><i class="fas fa-sort-amount-up"></i> Quantity:</label>
+                <input type="number" id="quantity" name="quantity" min="0.01" step="0.01" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="purchasePrice"><i class="fas fa-rupee-sign"></i> Purchase Price:</label>
+                <input type="number" id="purchasePrice" name="purchase_price" min="0.01" step="0.01" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="purchaseDate"><i class="fas fa-calendar-alt"></i> Purchase Date:</label>
+                <input type="date" id="purchaseDate" name="purchase_date" required>
+            </div>
+            
+            <button type="submit" class="button button-primary">
+                <i class="fas fa-plus-circle"></i> Add to Portfolio
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Create Portfolio Modal -->
+<div id="createPortfolioModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2><i class="fas fa-folder-plus"></i> Create New Portfolio</h2>
+        <form id="createPortfolioForm" class="modal-form">
+            <div class="form-group">
+                <label for="portfolioName"><i class="fas fa-tag"></i> Portfolio Name:</label>
+                <input type="text" id="portfolioName" name="name" required>
+            </div>
+            
+            <button type="submit" class="button button-primary">
+                <i class="fas fa-plus-circle"></i> Create Portfolio
+            </button>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if ticker %}
+<script>
+    // Parse stock data from Flask
+    const stockData = {{ stock_data|safe }};
+    
+    // Create chart
+    const ctx = document.getElementById('priceChart').getContext('2d');
+    const priceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [{
+                label: 'Stock Price',
+                data: stockData.map(item => ({
+                    x: item.date,
+                    y: item.price
+                })),
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                tension: 0.1,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'month'
+                    },
+                    title: {
+                        display: true,
+                        text: 'Date'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Price'
+                    }
+                }
+            },
+            animation: {
+                duration: 2000,
+                easing: 'easeOutQuart'
+            }
+        }
+    });
+    
+    {% if current_user.is_authenticated %}
+    // Modal functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        const portfolioModal = document.getElementById('portfolioModal');
+        const createPortfolioModal = document.getElementById('createPortfolioModal');
+        const addToPortfolioBtn = document.getElementById('addToPortfolioBtn');
+        const closeButtons = document.getElementsByClassName('close');
+        const createNewPortfolioBtn = document.getElementById('createNewPortfolioBtn');
+        const watchlistBtn = document.getElementById('addToWatchlistBtn');
+        
+        // When the user clicks the button, open the modal
+        addToPortfolioBtn.onclick = function() {
+            // Show loading state
+            addToPortfolioBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+            addToPortfolioBtn.disabled = true;
+            
+            // Fetch portfolios
+            fetch('/api/portfolio')
+                .then(response => response.json())
+                .then(data => {
+                    // Reset button
+                    addToPortfolioBtn.innerHTML = '<i class="fas fa-briefcase"></i> Add to Portfolio';
+                    addToPortfolioBtn.disabled = false;
+                    
+                    const select = document.getElementById('portfolioSelect');
+                    select.innerHTML = '';
+                    
+                    if (data.length > 0) {
+                        data.forEach(portfolio => {
+                            const option = document.createElement('option');
+                            option.value = portfolio.id;
+                            option.textContent = portfolio.name;
+                            select.appendChild(option);
+                        });
+                        
+                        document.getElementById('noPortfoliosMessage').style.display = 'none';
+                        select.style.display = 'block';
+                    } else {
+                        // No portfolios found
+                        document.getElementById('noPortfoliosMessage').style.display = 'block';
+                        select.style.display = 'none';
+                    }
+                    
+                    // Set default values
+                    // Get current price from the page
+                    const currentPriceElement = document.querySelector('.metric-card:first-child .metric-value');
+                    let currentPrice = '0.00';
+                    if (currentPriceElement) {
+                        currentPrice = currentPriceElement.textContent.replace('₹', '').replace(',', '');
+                    }
+                    
+                    document.getElementById('purchasePrice').value = currentPrice;
+                    document.getElementById('purchaseDate').valueAsDate = new Date();
+                    
+                    portfolioModal.style.display = 'block';
+                    
+                    // Add animation class
+                    portfolioModal.classList.add('modal-open');
+                })
+                .catch(error => {
+                    // Reset button
+                    addToPortfolioBtn.innerHTML = '<i class="fas fa-briefcase"></i> Add to Portfolio';
+                    addToPortfolioBtn.disabled = false;
+                    
+                    console.error('Error:', error);
+                    alert('Error fetching portfolios. Please try again.');
+                });
+        }
+        
+        // Create new portfolio button
+        if (createNewPortfolioBtn) {
+            createNewPortfolioBtn.addEventListener('click', function() {
+                // Hide portfolio modal
+                portfolioModal.classList.remove('modal-open');
+                setTimeout(() => {
+                    portfolioModal.style.display = 'none';
+                    
+                    // Show create portfolio modal
+                    createPortfolioModal.style.display = 'block';
+                    createPortfolioModal.classList.add('modal-open');
+                    document.getElementById('portfolioName').focus();
+                }, 300);
+            });
+        }
+        
+        // When the user clicks on <span> (x), close the modal
+        Array.from(closeButtons).forEach(button => {
+            button.onclick = function() {
+                portfolioModal.classList.remove('modal-open');
+                createPortfolioModal.classList.remove('modal-open');
+                setTimeout(() => {
+                    portfolioModal.style.display = 'none';
+                    createPortfolioModal.style.display = 'none';
+                }, 300);
+            }
+        });
+        
+        // When the user clicks anywhere outside of the modal, close it
+        window.onclick = function(event) {
+            if (event.target == portfolioModal) {
+                portfolioModal.classList.remove('modal-open');
+                setTimeout(() => {
+                    portfolioModal.style.display = 'none';
+                }, 300);
+            }
+            if (event.target == createPortfolioModal) {
+                createPortfolioModal.classList.remove('modal-open');
+                setTimeout(() => {
+                    createPortfolioModal.style.display = 'none';
+                }, 300);
+            }
+        }
+        
+        // Handle create portfolio form submission
+        document.getElementById('createPortfolioForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Show loading state
+            const submitBtn = this.querySelector('button[type="submit"]');
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+            submitBtn.disabled = true;
+            
+            const formData = {
+                name: document.getElementById('portfolioName').value
+            };
+            
+            fetch('/api/portfolio', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Reset button
+                submitBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Create Portfolio';
+                submitBtn.disabled = false;
+                
+                // Hide create portfolio modal
+                createPortfolioModal.classList.remove('modal-open');
+                setTimeout(() => {
+                    createPortfolioModal.style.display = 'none';
+                    
+                    // Show portfolio modal again with the new portfolio selected
+                    portfolioModal.style.display = 'block';
+                    portfolioModal.classList.add('modal-open');
+                    
+                    // Add the new portfolio to the select
+                    const select = document.getElementById('portfolioSelect');
+                    const option = document.createElement('option');
+                    option.value = data.id;
+                    option.textContent = data.name;
+                    select.innerHTML = '';
+                    select.appendChild(option);
+                    
+                    // Show the select and hide the message
+                    document.getElementById('noPortfoliosMessage').style.display = 'none';
+                    select.style.display = 'block';
+                }, 300);
+            })
+            .catch((error) => {
+                // Reset button
+                submitBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Create Portfolio';
+                submitBtn.disabled = false;
+                
+                console.error('Error:', error);
+                alert('Error creating portfolio');
+            });
+        });
+        
+        // Handle form submission
+        document.getElementById('addToPortfolioForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Show loading state
+            const submitBtn = this.querySelector('button[type="submit"]');
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+            submitBtn.disabled = true;
+            
+            const formData = {
+                portfolio_id: document.getElementById('portfolioSelect').value,
+                ticker: document.getElementById('portfolioTicker').value,
+                quantity: document.getElementById('quantity').value,
+                purchase_price: document.getElementById('purchasePrice').value,
+                purchase_date: document.getElementById('purchaseDate').value
+            };
+            
+            fetch('/api/portfolio', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Reset button
+                submitBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Add to Portfolio';
+                submitBtn.disabled = false;
+                
+                portfolioModal.classList.remove('modal-open');
+                setTimeout(() => {
+                    portfolioModal.style.display = 'none';
+                }, 300);
+                
+                // Show success message
+                const successMessage = document.createElement('div');
+                successMessage.className = 'flash-message success';
+                successMessage.innerHTML = '<i class="fas fa-check-circle"></i> Stock added to portfolio successfully!';
+                document.querySelector('.card-content').prepend(successMessage);
+                
+                // Remove message after 5 seconds
+                setTimeout(() => {
+                    successMessage.classList.add('fadeOut');
+                    setTimeout(() => {
+                        successMessage.remove();
+                    }, 500);
+                }, 5000);
+            })
+            .catch((error) => {
+                // Reset button
+                submitBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Add to Portfolio';
+                submitBtn.disabled = false;
+                
+                console.error('Error:', error);
+                alert('Error adding stock to portfolio');
+            });
+        });
+        
+        // Handle watchlist button
+        if (watchlistBtn) {
+            watchlistBtn.addEventListener('click', function() {
+                const ticker = this.getAttribute('data-ticker');
+                
+                // Show loading state
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+                this.disabled = true;
+                
+                fetch('/api/watchlist', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ ticker: ticker }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        // Reset button
+                        this.innerHTML = '<i class="fas fa-star"></i> Add to Watchlist';
+                        this.disabled = false;
+                        
+                        alert(data.error);
+                    } else {
+                        // Update button
+                        this.innerHTML = '<i class="fas fa-check"></i> Added to Watchlist';
+                        this.disabled = true;
+                        this.classList.remove('button-primary');
+                        this.classList.add('button-success');
+                        
+                        // Show success message
+                        const successMessage = document.createElement('div');
+                        successMessage.className = 'flash-message success';
+                        successMessage.innerHTML = '<i class="fas fa-check-circle"></i> Stock added to watchlist successfully!';
+                        document.querySelector('.card-content').prepend(successMessage);
+                        
+                        // Remove message after 5 seconds
+                        setTimeout(() => {
+                            successMessage.classList.add('fadeOut');
+                            setTimeout(() => {
+                                successMessage.remove();
+                            }, 500);
+                        }, 5000);
+                    }
+                })
+                .catch((error) => {
+                    // Reset button
+                    this.innerHTML = '<i class="fas fa-star"></i> Add to Watchlist';
+                    this.disabled = false;
+                    
+                    console.error('Error:', error);
+                    alert('Error adding stock to watchlist');
+                });
+            });
+        }
+    });
+    {% endif %}
+</script>
+{% endif %}
+{% endblock %}

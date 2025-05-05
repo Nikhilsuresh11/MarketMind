@@ -1,0 +1,158 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="card full-width">
+    <div class="card-header">
+        <h2>Market News</h2>
+        <p class="card-description">Latest financial news and market updates</p>
+    </div>
+    <div class="card-content">
+        <div class="filter-controls">
+            <div class="filter-group">
+                <label for="newsFilter">Filter By:</label>
+                <select id="newsFilter">
+                    <option value="all">All News</option>
+                    <option value="positive">Positive Sentiment</option>
+                    <option value="negative">Negative Sentiment</option>
+                    <option value="neutral">Neutral Sentiment</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="sortNews">Sort By:</label>
+                <select id="sortNews">
+                    <option value="latest">Latest First</option>
+                    <option value="oldest">Oldest First</option>
+                    <option value="sentiment">Sentiment</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="news-grid">
+            {% for item in news %}
+            <div class="news-card" data-sentiment="{% if item.sentiment > 0.5 %}positive{% elif item.sentiment < -0.2 %}negative{% else %}neutral{% endif %}">
+                <div class="news-header">
+                    <h3 class="news-title">{{ item.title }}</h3>
+                    <div class="news-meta">
+                        <span class="news-source">{{ item.source }}</span>
+                        <span class="news-date">{{ item.published_at }}</span>
+                    </div>
+                </div>
+                
+                {% if item.sentiment is defined %}
+                <div class="sentiment-indicator 
+                    {% if item.sentiment > 0.5 %}positive
+                    {% elif item.sentiment < -0.2 %}negative
+                    {% else %}neutral{% endif %}">
+                    <i class="fas {% if item.sentiment > 0.5 %}fa-arrow-up{% elif item.sentiment < -0.2 %}fa-arrow-down{% else %}fa-minus{% endif %}"></i>
+                    {{ "Positive" if item.sentiment > 0.5 else "Negative" if item.sentiment < -0.2 else "Neutral" }} Sentiment
+                </div>
+                {% endif %}
+                
+                {% if item.ticker %}
+                <div class="news-footer">
+                    <a href="{{ url_for('analysis', ticker=item.ticker) }}" class="ticker-link">
+                        <i class="fas fa-chart-line"></i> {{ item.ticker }}
+                    </a>
+                    
+                    {% if current_user.is_authenticated %}
+                    <button class="button small-button add-to-watchlist" data-ticker="{{ item.ticker }}">
+                        <i class="fas fa-star"></i> Watch
+                    </button>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Filter and sort functionality
+        const newsFilter = document.getElementById('newsFilter');
+        const sortNews = document.getElementById('sortNews');
+        const newsCards = document.querySelectorAll('.news-card');
+        
+        function applyFilters() {
+            const selectedFilter = newsFilter.value;
+            
+            newsCards.forEach(card => {
+                const sentiment = card.getAttribute('data-sentiment');
+                
+                if (selectedFilter === 'all' || sentiment === selectedFilter) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+        
+        function sortCards() {
+            const container = document.querySelector('.news-grid');
+            const cardsArray = Array.from(newsCards);
+            
+            cardsArray.sort((a, b) => {
+                if (sortNews.value === 'latest') {
+                    const dateA = new Date(a.querySelector('.news-date').textContent);
+                    const dateB = new Date(b.querySelector('.news-date').textContent);
+                    return dateB - dateA; // Latest first
+                } else if (sortNews.value === 'oldest') {
+                    const dateA = new Date(a.querySelector('.news-date').textContent);
+                    const dateB = new Date(b.querySelector('.news-date').textContent);
+                    return dateA - dateB; // Oldest first
+                } else if (sortNews.value === 'sentiment') {
+                    const sentimentA = a.getAttribute('data-sentiment');
+                    const sentimentB = b.getAttribute('data-sentiment');
+                    
+                    // Order: positive, neutral, negative
+                    const order = { 'positive': 0, 'neutral': 1, 'negative': 2 };
+                    return order[sentimentA] - order[sentimentB];
+                }
+            });
+            
+            // Remove all cards
+            cardsArray.forEach(card => card.remove());
+            
+            // Append sorted cards
+            cardsArray.forEach(card => container.appendChild(card));
+        }
+        
+        newsFilter.addEventListener('change', applyFilters);
+        sortNews.addEventListener('change', sortCards);
+        
+        // Add to watchlist functionality
+        const watchlistButtons = document.querySelectorAll('.add-to-watchlist');
+        watchlistButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const ticker = this.getAttribute('data-ticker');
+                
+                fetch('/api/watchlist', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ ticker: ticker }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(data.error);
+                    } else {
+                        alert('Stock added to watchlist successfully!');
+                        this.disabled = true;
+                        this.innerHTML = '<i class="fas fa-check"></i> Added';
+                    }
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                    alert('Error adding stock to watchlist');
+                });
+            });
+        });
+    });
+</script>
+{% endblock %}
+

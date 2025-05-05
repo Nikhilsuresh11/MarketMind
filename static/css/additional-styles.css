@@ -1,0 +1,205 @@
+/* Modal improvements */
+.modal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  .modal-content {
+    max-width: 500px;
+    width: 100%;
+    padding: 2rem;
+    border-radius: 1rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  }
+  
+  .modal-content h2 {
+    margin-bottom: 1.5rem;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .modal-content .form-group {
+    margin-bottom: 1.5rem;
+  }
+  
+  .modal-content label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+  
+  .modal-content input,
+  .modal-content select {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+  }
+  
+  .modal-content input:focus,
+  .modal-content select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  }
+  
+  .modal-content button {
+    margin-top: 1rem;
+  }
+  
+  .modal-content .close {
+    position: absolute;
+    top: 1rem;
+    right: 1.5rem;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-light);
+    transition: color 0.2s;
+  }
+  
+  .modal-content .close:hover {
+    color: var(--primary);
+  }
+  
+  /* Table improvements */
+  .table-container {
+    overflow-x: auto;
+    margin-bottom: 2rem;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  
+  .data-table th {
+    background-color: var(--primary);
+    color: white;
+    font-weight: 600;
+    text-align: left;
+    padding: 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  
+  .data-table td {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  
+  .data-table tr:last-child td {
+    border-bottom: none;
+  }
+  
+  .data-table tr:hover td {
+    background-color: var(--secondary);
+  }
+  
+  /* Portfolio summary improvements */
+  .portfolio-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+  }
+  
+  .summary-card {
+    background-color: var(--card);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    box-shadow: var(--shadow);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+  
+  .summary-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-lg);
+  }
+  
+  .summary-title {
+    font-size: 1rem;
+    color: var(--text-light);
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .summary-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+  
+  .summary-value.positive {
+    color: var(--success);
+  }
+  
+  .summary-value.negative {
+    color: var(--danger);
+  }
+  
+  /* Screener improvements */
+  #stockSelect {
+    min-height: 150px;
+    padding: 0.75rem;
+  }
+  
+  #stockSelect option {
+    padding: 0.5rem;
+    margin-bottom: 0.25rem;
+    border-radius: 0.25rem;
+  }
+  
+  #stockSelect option:checked {
+    background-color: var(--primary);
+    color: white;
+  }
+  
+  /* Animation for modals */
+  .modal-open {
+    animation: modalFadeIn 0.3s ease forwards;
+  }
+  
+  @keyframes modalFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* Responsive improvements */
+  @media (max-width: 768px) {
+    .portfolio-summary {
+      grid-template-columns: 1fr;
+    }
+  
+    .modal-content {
+      padding: 1.5rem;
+      margin: 1rem;
+      max-width: calc(100% - 2rem);
+    }
+  
+    .data-table th,
+    .data-table td {
+      padding: 0.75rem 0.5rem;
+      font-size: 0.875rem;
+    }
+  }
+  

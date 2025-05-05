@@ -1,0 +1,182 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="card full-width">
+    <div class="card-header">
+        <h2>Indian Stock Tax Calculator</h2>
+        <p class="card-description">Calculate capital gains tax on your stock investments</p>
+    </div>
+    <div class="card-content">
+        <div class="tax-calculator">
+            <div class="calculator-form">
+                <div class="form-group">
+                    <label for="buyPrice"><i class="fas fa-rupee-sign"></i> Buy Price (₹):</label>
+                    <input type="number" id="buyPrice" min="0.01" step="0.01" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="sellPrice"><i class="fas fa-rupee-sign"></i> Sell Price (₹):</label>
+                    <input type="number" id="sellPrice" min="0.01" step="0.01" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="quantity"><i class="fas fa-sort-amount-up"></i> Quantity:</label>
+                    <input type="number" id="quantity" min="1" step="1" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="holdingPeriod"><i class="fas fa-calendar-alt"></i> Holding Period (days):</label>
+                    <input type="number" id="holdingPeriod" min="1" step="1" required>
+                </div>
+                
+                <button id="calculateTaxBtn" class="button button-primary">
+                    <i class="fas fa-calculator"></i> Calculate Tax
+                </button>
+            </div>
+            
+            <div class="tax-results" id="taxResults" style="display: none;">
+                <h3>Tax Calculation Results</h3>
+                
+                <div class="result-item">
+                    <span class="result-label">Total Profit/Loss:</span>
+                    <span class="result-value" id="totalProfit"></span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">Tax Type:</span>
+                    <span class="result-value" id="taxType"></span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">Tax Amount:</span>
+                    <span class="result-value" id="taxAmount"></span>
+                </div>
+                
+                <div class="result-item">
+                    <span class="result-label">Net Profit/Loss:</span>
+                    <span class="result-value" id="netProfit"></span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="tax-info">
+            <h3>Indian Stock Tax Information</h3>
+            
+            <div class="info-section">
+                <h4><i class="fas fa-hourglass-half"></i> Short Term Capital Gains (STCG)</h4>
+                <p>Applicable when stocks are held for less than 1 year (365 days).</p>
+                <p>Tax Rate: <span class="highlight">15%</span> of the profit</p>
+            </div>
+            
+            <div class="info-section">
+                <h4><i class="fas fa-hourglass-end"></i> Long Term Capital Gains (LTCG)</h4>
+                <p>Applicable when stocks are held for more than 1 year (365 days).</p>
+                <p>Tax Rate: <span class="highlight">10%</span> of the profit exceeding ₹1,00,000 in a financial year</p>
+                <p>Note: The first ₹1,00,000 of LTCG in a financial year is exempt from tax.</p>
+            </div>
+            
+            <div class="info-section">
+                <h4><i class="fas fa-info-circle"></i> Other Considerations</h4>
+                <ul class="feature-list">
+                    <li><i class="fas fa-check"></i> Securities Transaction Tax (STT) is applicable on both buy and sell transactions</li>
+                    <li><i class="fas fa-check"></i> Indexation benefit is not available for equity shares and equity-oriented mutual funds</li>
+                    <li><i class="fas fa-check"></i> Tax rates are subject to change based on government policies</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const calculateTaxBtn = document.getElementById('calculateTaxBtn');
+        const taxResults = document.getElementById('taxResults');
+        
+        calculateTaxBtn.addEventListener('click', function() {
+            const buyPrice = parseFloat(document.getElementById('buyPrice').value);
+            const sellPrice = parseFloat(document.getElementById('sellPrice').value);
+            const quantity = parseInt(document.getElementById('quantity').value);
+            const holdingPeriod = parseInt(document.getElementById('holdingPeriod').value);
+            
+            // Validate inputs
+            if (isNaN(buyPrice) || isNaN(sellPrice) || isNaN(quantity) || isNaN(holdingPeriod)) {
+                alert('Please enter valid numbers for all fields');
+                return;
+            }
+            
+            if (buyPrice <= 0 || sellPrice <= 0 || quantity <= 0 || holdingPeriod <= 0) {
+                alert('All values must be greater than zero');
+                return;
+            }
+            
+            // Add loading animation
+            calculateTaxBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calculating...';
+            calculateTaxBtn.disabled = true;
+            
+            // Calculate tax
+            fetch('/api/calculate-tax', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    buy_price: buyPrice,
+                    sell_price: sellPrice,
+                    quantity: quantity,
+                    holding_period: holdingPeriod
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Reset button
+                calculateTaxBtn.innerHTML = '<i class="fas fa-calculator"></i> Calculate Tax';
+                calculateTaxBtn.disabled = false;
+                
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+                
+                // Display results
+                document.getElementById('totalProfit').textContent = `₹${data.profit.toLocaleString('en-IN', {maximumFractionDigits: 2})}`;
+                document.getElementById('taxType').textContent = data.tax_type;
+                document.getElementById('taxAmount').textContent = `₹${data.tax.toLocaleString('en-IN', {maximumFractionDigits: 2})}`;
+                document.getElementById('netProfit').textContent = `₹${data.net_profit.toLocaleString('en-IN', {maximumFractionDigits: 2})}`;
+                
+                // Apply color styling based on profit/loss
+                const profitElement = document.getElementById('totalProfit');
+                const netProfitElement = document.getElementById('netProfit');
+                
+                if (data.profit > 0) {
+                    profitElement.classList.add('positive');
+                    profitElement.classList.remove('negative');
+                    netProfitElement.classList.add('positive');
+                    netProfitElement.classList.remove('negative');
+                } else {
+                    profitElement.classList.add('negative');
+                    profitElement.classList.remove('positive');
+                    netProfitElement.classList.add('negative');
+                    netProfitElement.classList.remove('positive');
+                }
+                
+                // Show results with animation
+                taxResults.style.display = 'block';
+                taxResults.classList.add('fadeIn');
+                
+                // Scroll to results
+                taxResults.scrollIntoView({ behavior: 'smooth' });
+            })
+            .catch(error => {
+                // Reset button
+                calculateTaxBtn.innerHTML = '<i class="fas fa-calculator"></i> Calculate Tax';
+                calculateTaxBtn.disabled = false;
+                
+                console.error('Error:', error);
+                alert('Error calculating tax. Please try again.');
+            });
+        });
+    });
+</script>
+{% endblock %}

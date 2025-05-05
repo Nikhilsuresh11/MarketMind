@@ -1,0 +1,13 @@
+flask
+python-dotenv
+yfinance
+pandas
+numpy
+matplotlib
+agno
+flask-sqlalchemy
+flask-login
+apscheduler
+requests
+werkzeug
+

@@ -1,0 +1,298 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="card full-width">
+  <div class="card-header">
+      <div class="header-with-actions">
+          <div>
+              <h2><i class="fas fa-robot"></i> AI Stock Advisor</h2>
+              <p class="card-description">Ask any question about stocks, market trends, or financial advice</p>
+          </div>
+          <div class="header-actions">
+              <div class="dropdown">
+                  <button class="button dropdown-button">
+                      <i class="fas fa-history"></i> Recent Chats
+                  </button>
+                  <div class="dropdown-content">
+                      <a href="#" class="new-chat">
+                          <i class="fas fa-plus"></i> New Chat
+                      </a>
+                      <div class="dropdown-divider"></div>
+                      {% if chat_history_list %}
+                          {% for chat in chat_history_list %}
+                          <a href="#" class="load-chat" data-id="{{ chat.id }}">
+                              <i class="fas fa-comment"></i> {{ chat.title }}
+                              <span class="chat-date">{{ chat.timestamp.strftime('%d %b') }}</span>
+                          </a>
+                          {% endfor %}
+                      {% else %}
+                          <span class="no-chats">No recent chats</span>
+                      {% endif %}
+                  </div>
+              </div>
+          </div>
+      </div>
+  </div>
+  <div class="card-content">
+      <div class="chatbot-container">
+          <div class="chat-messages" id="chatMessages">
+              <div class="chat-welcome">
+                  <h3>Welcome to AI Stock Advisor</h3>
+                  <p>Ask me anything about Indian stocks, market trends, or investment advice. I can analyze market data, news, and financial metrics to provide comprehensive answers.</p>
+                  <div class="example-questions">
+                      <h4>Example Questions:</h4>
+                      <div class="example-buttons">
+                          <button class="example-button" data-question="Analyze Reliance Industries (RELIANCE.NS) stock performance and give me your recommendation.">
+                              Analyze Reliance
+                          </button>
+                          <button class="example-button" data-question="Compare TCS, Infosys, and Wipro stocks. Which one has better growth potential?">
+                              Compare IT stocks
+                          </button>
+                          <button class="example-button" data-question="Recommend 5 high dividend yield stocks from Nifty 50 with low volatility.">
+                              Recommend dividend stocks
+                          </button>
+                          <button class="example-button" data-question="What are the best small-cap stocks to invest in right now?">
+                              Small-cap picks
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+          
+          <div class="chat-input">
+              <form id="chatForm">
+                  <input type="text" id="userQuery" placeholder="Ask about stocks or investments..." required>
+                  <button type="submit" class="button button-primary">
+                      <i class="fas fa-paper-plane"></i>
+                  </button>
+              </form>
+          </div>
+      </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+      const chatForm = document.getElementById('chatForm');
+      const userQueryInput = document.getElementById('userQuery');
+      const chatMessages = document.getElementById('chatMessages');
+      let currentChatId = null;
+      
+      // Handle example buttons
+      const exampleButtons = document.querySelectorAll('.example-button');
+      exampleButtons.forEach(button => {
+          button.addEventListener('click', function() {
+              const question = this.getAttribute('data-question');
+              userQueryInput.value = question;
+              chatForm.dispatchEvent(new Event('submit'));
+          });
+      });
+      
+      // Handle new chat button
+      const newChatButton = document.querySelector('.new-chat');
+      if (newChatButton) {
+          newChatButton.addEventListener('click', function(e) {
+              e.preventDefault();
+              
+              // Clear chat messages and show welcome message
+              chatMessages.innerHTML = `
+                  <div class="chat-welcome">
+                      <h3>Welcome to AI Stock Advisor</h3>
+                      <p>Ask me anything about Indian stocks, market trends, or investment advice. I can analyze market data, news, and financial metrics to provide comprehensive answers.</p>
+                      <div class="example-questions">
+                          <h4>Example Questions:</h4>
+                          <div class="example-buttons">
+                              <button class="example-button" data-question="Analyze Reliance Industries (RELIANCE.NS) stock performance and give me your recommendation.">
+                                  Analyze Reliance
+                              </button>
+                              <button class="example-button" data-question="Compare TCS, Infosys, and Wipro stocks. Which one has better growth potential?">
+                                  Compare IT stocks
+                              </button>
+                              <button class="example-button" data-question="Recommend 5 high dividend yield stocks from Nifty 50 with low volatility.">
+                                  Recommend dividend stocks
+                              </button>
+                              <button class="example-button" data-question="What are the best small-cap stocks to invest in right now?">
+                                  Small-cap picks
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+              `;
+              
+              // Reinitialize example buttons
+              const newExampleButtons = document.querySelectorAll('.example-button');
+              newExampleButtons.forEach(button => {
+                  button.addEventListener('click', function() {
+                      const question = this.getAttribute('data-question');
+                      userQueryInput.value = question;
+                      chatForm.dispatchEvent(new Event('submit'));
+                  });
+              });
+              
+              // Reset current chat ID
+              currentChatId = null;
+          });
+      }
+      
+      // Handle load chat buttons
+      const loadChatButtons = document.querySelectorAll('.load-chat');
+      loadChatButtons.forEach(button => {
+          button.addEventListener('click', function(e) {
+              e.preventDefault();
+              const chatId = this.getAttribute('data-id');
+              
+              // Show loading indicator
+              chatMessages.innerHTML = `
+                  <div class="loading-chat">
+                      <div class="spinner"></div>
+                      <p>Loading chat history...</p>
+                  </div>
+              `;
+              
+              // Load chat history
+              fetch(`/api/chat-history/${chatId}`)
+                  .then(response => response.json())
+                  .then(data => {
+                      if (data.success) {
+                          // Clear chat messages
+                          chatMessages.innerHTML = '';
+                          
+                          // Add chat messages
+                          data.messages.forEach(message => {
+                              addMessage(message.role, message.content);
+                          });
+                          
+                          // Set current chat ID
+                          currentChatId = chatId;
+                          
+                          // Scroll to bottom
+                          scrollToBottom();
+                      } else {
+                          chatMessages.innerHTML = `
+                              <div class="error-message">
+                                  <i class="fas fa-exclamation-circle"></i>
+                                  <p>Error loading chat history. Please try again.</p>
+                              </div>
+                          `;
+                      }
+                  })
+                  .catch(error => {
+                      console.error('Error:', error);
+                      chatMessages.innerHTML = `
+                          <div class="error-message">
+                              <i class="fas fa-exclamation-circle"></i>
+                              <p>Error loading chat history. Please try again.</p>
+                          </div>
+                      `;
+                  });
+          });
+      });
+      
+      // Handle chat form submission
+      chatForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          
+          const userQuery = userQueryInput.value.trim();
+          if (!userQuery) return;
+          
+          // Add user message to chat
+          addMessage('user', userQuery);
+          
+          // Clear input
+          userQueryInput.value = '';
+          
+          // Show loading indicator
+          const loadingMessage = addMessage('ai', '<div class="typing-indicator"><span></span><span></span><span></span></div>');
+          
+          // Send request to server
+          fetch('/api/chat', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ 
+                  query: userQuery,
+                  chat_id: currentChatId
+              }),
+          })
+          .then(response => response.json())
+          .then(data => {
+              // Remove loading indicator
+              loadingMessage.remove();
+              
+              // Add AI response
+              if (data.success) {
+                  addMessage('ai', data.response);
+                  
+                  // Update current chat ID if this is a new chat
+                  if (!currentChatId && data.chat_id) {
+                      currentChatId = data.chat_id;
+                  }
+              } else {
+                  addMessage('ai', `Error: ${data.response}`);
+              }
+              
+              // Scroll to bottom
+              scrollToBottom();
+          })
+          .catch(error => {
+              // Remove loading indicator
+              loadingMessage.remove();
+              
+              // Add error message
+              addMessage('ai', 'Sorry, there was an error processing your request. Please try again.');
+              console.error('Error:', error);
+              
+              // Scroll to bottom
+              scrollToBottom();
+          });
+      });
+      
+      // Function to add message to chat
+      function addMessage(role, content) {
+          // Remove welcome message if present
+          const welcomeMessage = document.querySelector('.chat-welcome');
+          if (welcomeMessage) {
+              welcomeMessage.remove();
+          }
+          
+          // Create message element
+          const messageDiv = document.createElement('div');
+          messageDiv.className = `chat-message ${role === 'user' ? 'user-message' : 'ai-message'}`;
+          messageDiv.classList.add('fadeIn');
+          
+          // Create avatar
+          const avatarDiv = document.createElement('div');
+          avatarDiv.className = 'message-avatar';
+          avatarDiv.innerHTML = role === 'user' ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>';
+          
+          // Create content
+          const contentDiv = document.createElement('div');
+          contentDiv.className = 'message-content';
+          contentDiv.innerHTML = content;
+          
+          // Assemble message
+          messageDiv.appendChild(avatarDiv);
+          messageDiv.appendChild(contentDiv);
+          
+          // Add to chat
+          chatMessages.appendChild(messageDiv);
+          
+          // Scroll to bottom
+          scrollToBottom();
+          
+          return messageDiv;
+      }
+      
+      // Function to scroll to bottom of chat
+      function scrollToBottom() {
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+      
+      // Initial scroll to bottom
+      scrollToBottom();
+  });
+</script>
+{% endblock %}

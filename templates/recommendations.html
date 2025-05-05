@@ -1,0 +1,189 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="card full-width">
+  <div class="card-header">
+      <h2>AI-Powered Recommendations</h2>
+      <p class="card-description">Top stock picks by sector with positive performance</p>
+  </div>
+  <div class="card-content">
+      {% if recommendations %}
+      <div class="filter-controls">
+          <div class="filter-group">
+              <label for="sectorFilter">Sector:</label>
+              <select id="sectorFilter">
+                  <option value="all">All Sectors</option>
+                  <option value="Energy">Energy</option>
+                  <option value="Technology">Technology</option>
+                  <option value="Financial">Financial</option>
+                  <option value="Consumer">Consumer</option>
+                  <option value="Healthcare">Healthcare</option>
+              </select>
+          </div>
+          <div class="filter-group">
+              <label for="sortBy">Sort By:</label>
+              <select id="sortBy">
+                  <option value="aiScore">AI Score</option>
+                  <option value="potential">Potential Return</option>
+                  <option value="name">Company Name</option>
+              </select>
+          </div>
+      </div>
+      
+      <div class="recommendations-grid">
+          {% for stock in recommendations %}
+          <div class="recommendation-card" data-recommendation="{{ stock.recommendation }}" data-sector="{{ stock.sector }}">
+              <div class="recommendation-header">
+                  <div>
+                      <h3>{{ stock.name }}</h3>
+                      <p class="stock-ticker">{{ stock.ticker }}</p>
+                      <p class="stock-sector">{{ stock.sector }}</p>
+                  </div>
+                  <div class="ai-score">
+                      <p>AI Score: {{ stock.aiScore }}/100</p>
+                  </div>
+              </div>
+              
+              <div class="recommendation-metrics">
+                  <div class="metric-box">
+                      <p class="metric-label">Recommendation</p>
+                      <p class="recommendation-tag {% if stock.recommendation == 'Buy' %}buy{% elif stock.recommendation == 'Hold' %}hold{% else %}sell{% endif %}">
+                          {{ stock.recommendation }}
+                      </p>
+                  </div>
+                  <div class="metric-box">
+                      <p class="metric-label">Target Price</p>
+                      <p class="metric-value">{{ stock.targetPrice }}</p>
+                  </div>
+                  <div class="metric-box">
+                      <p class="metric-label">Potential Return</p>
+                      <p class="metric-value positive">{{ stock.potential }}</p>
+                  </div>
+              </div>
+              
+              <div class="analysis-box">
+                  <p>{{ stock.analysis }}</p>
+              </div>
+              
+              <div class="card-actions">
+                  <a href="{{ url_for('analysis', ticker=stock.ticker) }}" class="button outline-button">
+                      <i class="fas fa-chart-line"></i> Detailed Analysis
+                  </a>
+                  {% if current_user.is_authenticated %}
+                  <button class="button add-to-watchlist" data-ticker="{{ stock.ticker }}">
+                      <i class="fas fa-star"></i> Add to Watchlist
+                  </button>
+                  {% endif %}
+              </div>
+          </div>
+          {% endfor %}
+      </div>
+      {% else %}
+      <div class="no-data-message">
+          <p>No stock recommendations available at this time. Please try again later.</p>
+          <button id="refreshRecommendations" class="button primary-button">
+              <i class="fas fa-sync-alt"></i> Refresh Recommendations
+          </button>
+      </div>
+      {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+      {% if recommendations %}
+      // Filter and sort functionality
+      const sectorFilter = document.getElementById('sectorFilter');
+      const sortBy = document.getElementById('sortBy');
+      const cards = document.querySelectorAll('.recommendation-card');
+      
+      function applyFilters() {
+          const selectedSector = sectorFilter.value;
+          
+          cards.forEach(card => {
+              const sector = card.getAttribute('data-sector');
+              
+              const sectorMatch = selectedSector === 'all' || sector === selectedSector;
+              
+              if (sectorMatch) {
+                  card.style.display = 'block';
+              } else {
+                  card.style.display = 'none';
+              }
+          });
+      }
+      
+      function sortCards() {
+          const container = document.querySelector('.recommendations-grid');
+          const cardsArray = Array.from(cards);
+          
+          cardsArray.sort((a, b) => {
+              if (sortBy.value === 'aiScore') {
+                  const scoreA = parseInt(a.querySelector('.ai-score').textContent.match(/\d+/)[0]);
+                  const scoreB = parseInt(b.querySelector('.ai-score').textContent.match(/\d+/)[0]);
+                  return scoreB - scoreA; // Descending
+              } else if (sortBy.value === 'potential') {
+                  const potentialA = parseFloat(a.querySelector('.potential').textContent.match(/\+(\d+)/)?.[1] || 0);
+                  const potentialB = parseFloat(b.querySelector('.potential').textContent.match(/\+(\d+)/)?.[1] || 0);
+                  return potentialB - potentialA; // Descending
+              } else if (sortBy.value === 'name') {
+                  const nameA = a.querySelector('h3').textContent;
+                  const nameB = b.querySelector('h3').textContent;
+                  return nameA.localeCompare(nameB); // Ascending
+              }
+          });
+          
+          // Remove all cards
+          cardsArray.forEach(card => card.remove());
+          
+          // Append sorted cards
+          cardsArray.forEach(card => container.appendChild(card));
+      }
+      
+      sectorFilter.addEventListener('change', applyFilters);
+      sortBy.addEventListener('change', sortCards);
+      
+      // Add to watchlist functionality
+      const watchlistButtons = document.querySelectorAll('.add-to-watchlist');
+      watchlistButtons.forEach(button => {
+          button.addEventListener('click', function() {
+              const ticker = this.getAttribute('data-ticker');
+              
+              fetch('/api/watchlist', {
+                  method: 'POST',
+                  headers: {
+                      'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({ ticker: ticker }),
+              })
+              .then(response => response.json())
+              .then(data => {
+                  if (data.error) {
+                      alert(data.error);
+                  } else {
+                      alert('Stock added to watchlist successfully!');
+                      this.disabled = true;
+                      this.innerHTML = '<i class="fas fa-check"></i> Added';
+                  }
+              })
+              .catch((error) => {
+                  console.error('Error:', error);
+                  alert('Error adding stock to watchlist');
+              });
+          });
+      });
+      {% else %}
+      // Refresh button functionality
+      const refreshButton = document.getElementById('refreshRecommendations');
+      if (refreshButton) {
+          refreshButton.addEventListener('click', function() {
+              window.location.reload();
+          });
+      }
+      {% endif %}
+  });
+</script>
+{% endblock %}
+

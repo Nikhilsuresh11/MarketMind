@@ -1,0 +1,392 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="card full-width">
+    <div class="card-header">
+        <div class="header-with-actions">
+            <div>
+                <h2><i class="fas fa-star"></i> Watchlist</h2>
+                <div class="market-status">
+                    {% if market_open %}
+                    <span class="status-indicator open">🟢 Market Open</span>
+                    {% else %}
+                    <span class="status-indicator closed">🔴 Market Closed</span>
+                    {% endif %}
+                    <span class="current-time">{{ ist_time }}</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button id="addToWatchlistBtn" class="button button-primary">
+                    <i class="fas fa-plus"></i> Add Stock
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="card-content">
+        {% if watchlist %}
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Company</th>
+                            <th>Ticker</th>
+                            <th>Current Price</th>
+                            <th>Change</th>
+                            <th>Recommendation</th>
+                            <th>Target Price</th>
+                            <th>Potential</th>
+                            <th>AI Score</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in watchlist %}
+                            <tr class="fadeIn" style="animation-delay: {{ loop.index0 * 0.05 }}s">
+                                <td>{{ item.company_name }}</td>
+                                <td>
+                                    <a href="{{ url_for('analysis', ticker=item.ticker) }}">{{ item.ticker }}</a>
+                                </td>
+                                <td>₹{{ "{:,.2f}".format(item.current_price) }}</td>
+                                <td class="{% if item.price_change >= 0 %}positive{% else %}negative{% endif %}">
+                                    ₹{{ "{:,.2f}".format(item.price_change) }} ({{ "{:.2f}".format(item.price_change_pct) }}%)
+                                </td>
+                                <td class="{% if item.recommendation == 'Buy' %}positive{% elif item.recommendation == 'Hold' %}neutral{% else %}negative{% endif %}">
+                                    {{ item.recommendation }}
+                                </td>
+                                <td>{{ item.target_price }}</td>
+                                <td class="{% if '+' in item.potential %}positive{% else %}negative{% endif %}">{{ item.potential }}</td>
+                                <td>
+                                    <div class="ai-score-bar">
+                                        <div class="ai-score-fill" style="width: {{ item.ai_score }}%;"></div>
+                                        <span>{{ item.ai_score }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="action-buttons-small">
+                                        <button class="icon-button add-to-portfolio" data-ticker="{{ item.ticker }}" title="Add to Portfolio">
+                                            <i class="fas fa-briefcase"></i>
+                                        </button>
+                                        <button class="icon-button remove-from-watchlist" data-id="{{ item.id }}" title="Remove from Watchlist">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <i class="fas fa-star fa-3x"></i>
+                <p>Your watchlist is empty. Add stocks to track them.</p>
+                <button id="emptyAddToWatchlistBtn" class="button button-primary">
+                    <i class="fas fa-plus"></i> Add Stock
+                </button>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add to Watchlist Modal -->
+<div id="watchlistModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2><i class="fas fa-star"></i> Add to Watchlist</h2>
+        <form id="addToWatchlistForm" class="modal-form">
+            <div class="form-group">
+                <label for="watchlistTicker"><i class="fas fa-tag"></i> Ticker Symbol:</label>
+                <input type="text" id="watchlistTicker" name="ticker" required>
+                <p class="form-hint">Example: RELIANCE.NS, ADANIPOWER.NS, TCS.NS</p>
+            </div>
+            
+            <button type="submit" class="button button-primary">
+                <i class="fas fa-plus-circle"></i> Add to Watchlist
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Add to Portfolio Modal -->
+<div id="portfolioModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2><i class="fas fa-briefcase"></i> Add to Portfolio</h2>
+        <form id="addToPortfolioForm" class="modal-form">
+            <input type="hidden" id="portfolioTicker" name="ticker" value="">
+            
+            <div class="form-group">
+                <label for="portfolioSelect"><i class="fas fa-folder"></i> Select Portfolio:</label>
+                <select id="portfolioSelect" name="portfolio_id" required>
+                    <!-- Will be populated via JavaScript -->
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="quantity"><i class="fas fa-sort-amount-up"></i> Quantity:</label>
+                <input type="number" id="quantity" name="quantity" min="0.01" step="0.01" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="purchasePrice"><i class="fas fa-rupee-sign"></i> Purchase Price:</label>
+                <input type="number" id="purchasePrice" name="purchase_price" min="0.01" step="0.01" required>
+            </div>
+            
+            <button type="submit" class="button button-primary">
+                <i class="fas fa-plus-circle"></i> Add to Portfolio
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Modal functionality
+        const watchlistModal = document.getElementById('watchlistModal');
+        const portfolioModal = document.getElementById('portfolioModal');
+        const addToWatchlistBtn = document.getElementById('addToWatchlistBtn') || document.getElementById('emptyAddToWatchlistBtn');
+        const closeButtons = document.getElementsByClassName('close');
+        
+        if (addToWatchlistBtn) {
+            addToWatchlistBtn.onclick = function() {
+                watchlistModal.style.display = 'block';
+                watchlistModal.classList.add('modal-open');
+                document.getElementById('watchlistTicker').focus();
+            }
+        }
+        
+        // Close buttons
+        Array.from(closeButtons).forEach(button => {
+            button.onclick = function() {
+                watchlistModal.classList.remove('modal-open');
+                portfolioModal.classList.remove('modal-open');
+                setTimeout(() => {
+                    watchlistModal.style.display = 'none';
+                    portfolioModal.style.display = 'none';
+                }, 300);
+            }
+        });
+        
+        // Close when clicking outside
+        window.onclick = function(event) {
+            if (event.target == watchlistModal) {
+                watchlistModal.classList.remove('modal-open');
+                setTimeout(() => {
+                    watchlistModal.style.display = 'none';
+                }, 300);
+            }
+            if (event.target == portfolioModal) {
+                portfolioModal.classList.remove('modal-open');
+                setTimeout(() => {
+                    portfolioModal.style.display = 'none';
+                }, 300);
+            }
+        }
+        
+        // Form submissions
+        document.getElementById('addToWatchlistForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Show loading state
+            const submitBtn = this.querySelector('button[type="submit"]');
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+            submitBtn.disabled = true;
+            
+            const formData = {
+                ticker: document.getElementById('watchlistTicker').value
+            };
+            
+            fetch('/api/watchlist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Reset button
+                submitBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Add to Watchlist';
+                submitBtn.disabled = false;
+                
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    watchlistModal.classList.remove('modal-open');
+                    setTimeout(() => {
+                        watchlistModal.style.display = 'none';
+                        window.location.reload();
+                    }, 300);
+                }
+            })
+            .catch((error) => {
+                // Reset button
+                submitBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Add to Watchlist';
+                submitBtn.disabled = false;
+                
+                console.error('Error:', error);
+                alert('Error adding to watchlist');
+            });
+        });
+        
+        // Remove from watchlist
+        const removeButtons = document.querySelectorAll('.remove-from-watchlist');
+        removeButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                if (confirm('Are you sure you want to remove this stock from your watchlist?')) {
+                    const itemId = this.getAttribute('data-id');
+                    
+                    // Show loading state
+                    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                    this.disabled = true;
+                    
+                    fetch('/api/watchlist', {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ id: itemId }),
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Fade out the row
+                            const row = this.closest('tr');
+                            row.classList.add('fadeOut');
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 500);
+                        } else {
+                            // Reset button
+                            this.innerHTML = '<i class="fas fa-trash"></i>';
+                            this.disabled = false;
+                            
+                            alert('Error removing from watchlist');
+                        }
+                    })
+                    .catch((error) => {
+                        // Reset button
+                        this.innerHTML = '<i class="fas fa-trash"></i>';
+                        this.disabled = false;
+                        
+                        console.error('Error:', error);
+                        alert('Error removing from watchlist');
+                    });
+                }
+            });
+        });
+        
+        // Add to portfolio
+        const addToPortfolioButtons = document.querySelectorAll('.add-to-portfolio');
+        addToPortfolioButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const ticker = this.getAttribute('data-ticker');
+                document.getElementById('portfolioTicker').value = ticker;
+                
+                // Show loading state
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                this.disabled = true;
+                
+                // Fetch portfolios
+                fetch('/api/portfolio')
+                    .then(response => response.json())
+                    .then(data => {
+                        // Reset button
+                        this.innerHTML = '<i class="fas fa-briefcase"></i>';
+                        this.disabled = false;
+                        
+                        const select = document.getElementById('portfolioSelect');
+                        select.innerHTML = '';
+                        
+                        data.forEach(portfolio => {
+                            const option = document.createElement('option');
+                            option.value = portfolio.id;
+                            option.textContent = portfolio.name;
+                            select.appendChild(option);
+                        });
+                        
+                        // Set default values
+                        // Find the current price from the table
+                        const row = this.closest('tr');
+                        const priceCell = row.querySelector('td:nth-child(3)');
+                        const price = priceCell.textContent.replace('₹', '').replace(',', '');
+                        
+                        document.getElementById('purchasePrice').value = price;
+                        
+                        portfolioModal.style.display = 'block';
+                        portfolioModal.classList.add('modal-open');
+                        document.getElementById('quantity').focus();
+                    })
+                    .catch(error => {
+                        // Reset button
+                        this.innerHTML = '<i class="fas fa-briefcase"></i>';
+                        this.disabled = false;
+                        
+                        console.error('Error:', error);
+                        alert('Error fetching portfolios. Please try again.');
+                    });
+            });
+        });
+        
+        // Add to portfolio form submission
+        document.getElementById('addToPortfolioForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Show loading state
+            const submitBtn = this.querySelector('button[type="submit"]');
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+            submitBtn.disabled = true;
+            
+            const formData = {
+                portfolio_id: document.getElementById('portfolioSelect').value,
+                ticker: document.getElementById('portfolioTicker').value,
+                quantity: document.getElementById('quantity').value,
+                purchase_price: document.getElementById('purchasePrice').value
+            };
+            
+            fetch('/api/portfolio', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Reset button
+                submitBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Add to Portfolio';
+                submitBtn.disabled = false;
+                
+                portfolioModal.classList.remove('modal-open');
+                setTimeout(() => {
+                    portfolioModal.style.display = 'none';
+                }, 300);
+                
+                // Show success message
+                const successMessage = document.createElement('div');
+                successMessage.className = 'flash-message success';
+                successMessage.innerHTML = '<i class="fas fa-check-circle"></i> Stock added to portfolio successfully!';
+                document.querySelector('.card-content').prepend(successMessage);
+                
+                // Remove message after 5 seconds
+                setTimeout(() => {
+                    successMessage.classList.add('fadeOut');
+                    setTimeout(() => {
+                        successMessage.remove();
+                    }, 500);
+                }, 5000);
+            })
+            .catch((error) => {
+                // Reset button
+                submitBtn.innerHTML = '<i class="fas fa-plus-circle"></i> Add to Portfolio';
+                submitBtn.disabled = false;
+                
+                console.error('Error:', error);
+                alert('Error adding stock to portfolio');
+            });
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,394 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+<div class="card full-width">
+    <div class="card-header">
+        <h2><i class="fas fa-search"></i> Stock Screener</h2>
+        <p class="card-description">Compare stocks side by side and screen for investment opportunities</p>
+    </div>
+    <div class="card-content">
+        <form action="{{ url_for('screener') }}" method="get" class="screener-form">
+            <div class="form-group">
+                <label for="stockSelect"><i class="fas fa-layer-group"></i> Select stocks to compare:</label>
+                <select id="stockSelect" name="stocks" multiple required>
+                    {% for stock in verified_stocks %}
+                        <option value="{{ stock.ticker }}" {% if stock.ticker in selected_stocks %}selected{% endif %}>
+                            {{ stock.name }} ({{ stock.ticker }})
+                        </option>
+                    {% endfor %}
+                </select>
+                <p class="form-hint">Hold Ctrl/Cmd to select multiple stocks</p>
+            </div>
+            
+            {% if not verified_stocks %}
+            <script>
+                // Add some default stocks if none are available
+                document.addEventListener('DOMContentLoaded', function() {
+                    const stockSelect = document.getElementById('stockSelect');
+                    if (stockSelect && stockSelect.options.length === 0) {
+                        const defaultStocks = [
+                            { ticker: "RELIANCE.NS", name: "Reliance Industries" },
+                            { ticker: "TCS.NS", name: "Tata Consultancy Services" },
+                            { ticker: "HDFCBANK.NS", name: "HDFC Bank" },
+                            { ticker: "INFY.NS", name: "Infosys" },
+                            { ticker: "BHARTIARTL.NS", name: "Bharti Airtel" }
+                        ];
+                        
+                        defaultStocks.forEach(stock => {
+                            const option = document.createElement('option');
+                            option.value = stock.ticker;
+                            option.textContent = `${stock.name} (${stock.ticker})`;
+                            stockSelect.appendChild(option);
+                        });
+                    }
+                });
+            </script>
+            {% endif %}
+            
+            <button type="submit" class="button button-primary">
+                <i class="fas fa-chart-bar"></i> Compare Stocks
+            </button>
+        </form>
+        
+        {% if selected_stocks %}
+            <div class="comparison-tabs">
+                <ul class="tab-list">
+                    <li class="tab-item active" data-tab="performance">
+                        <i class="fas fa-chart-line"></i> Performance
+                    </li>
+                    <li class="tab-item" data-tab="valuation">
+                        <i class="fas fa-calculator"></i> Valuation
+                    </li>
+                    <li class="tab-item" data-tab="financials">
+                        <i class="fas fa-file-invoice-dollar"></i> Financials
+                    </li>
+                    <li class="tab-item" data-tab="technical">
+                        <i class="fas fa-chart-area"></i> Technical
+                    </li>
+                </ul>
+                
+                <div class="tab-content">
+                    <!-- Performance Tab -->
+                    <div class="tab-pane active" id="performance">
+                        <h3><i class="fas fa-chart-line"></i> Price Performance Comparison</h3>
+                        
+                        {% if performance_chart %}
+                            <div class="chart-container">
+                                <div id="performanceChart" class="plotly-chart" data-chart='{{ performance_chart|safe }}'></div>
+                            </div>
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-chart-line fa-3x"></i>
+                                <p>No performance data available for the selected stocks.</p>
+                            </div>
+                        {% endif %}
+                        
+                        <h3><i class="fas fa-tachometer-alt"></i> Performance Metrics</h3>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Stock</th>
+                                        <th>Current Price</th>
+                                        <th>1 Day</th>
+                                        <th>1 Week</th>
+                                        <th>1 Month</th>
+                                        <th>6 Months</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for ticker, data in stock_data.items() %}
+                                        <tr class="fadeIn" style="animation-delay: {{ loop.index0 * 0.05 }}s">
+                                            <td>{{ data.name }}</td>
+                                            <td>₹{{ data.data[-1].price }}</td>
+                                            <td class="{% if data.data[-1].price > data.data[-2].price %}positive{% else %}negative{% endif %}">
+                                                {% set day_change = ((data.data[-1].price / data.data[-2].price) - 1) * 100 %}
+                                                {{ "{:.2f}%".format(day_change) }}
+                                            </td>
+                                            <td class="{% if data.data[-1].price > data.data[-5].price %}positive{% else %}negative{% endif %}">
+                                                {% set week_change = ((data.data[-1].price / data.data[-5].price) - 1) * 100 %}
+                                                {{ "{:.2f}%".format(week_change) }}
+                                            </td>
+                                            <td class="{% if data.data[-1].price > data.data[-20].price %}positive{% else %}negative{% endif %}">
+                                                {% set month_change = ((data.data[-1].price / data.data[-20].price) - 1) * 100 %}
+                                                {{ "{:.2f}%".format(month_change) }}
+                                            </td>
+                                            <td class="{% if data.data[-1].price > data.data[0].price %}positive{% else %}negative{% endif %}">
+                                                {% set six_month_change = ((data.data[-1].price / data.data[0].price) - 1) * 100 %}
+                                                {{ "{:.2f}%".format(six_month_change) }}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Valuation Tab -->
+                    <div class="tab-pane" id="valuation">
+                        <h3><i class="fas fa-balance-scale"></i> Valuation Metrics Comparison</h3>
+                        
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Stock</th>
+                                        <th>Market Cap</th>
+                                        <th>P/E Ratio</th>
+                                        <th>Forward P/E</th>
+                                        <th>PEG Ratio</th>
+                                        <th>Price/Sales</th>
+                                        <th>Price/Book</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for ticker, data in stock_data.items() %}
+                                        <tr class="fadeIn" style="animation-delay: {{ loop.index0 * 0.05 }}s">
+                                            <td>{{ data.name }}</td>
+                                            <td>
+                                                {% set market_cap = data.info.get('marketCap', 0) %}
+                                                {% if market_cap >= 1000000000 %}
+                                                    ₹{{ "{:.2f}B".format(market_cap/1000000000) }}
+                                                {% else %}
+                                                    ₹{{ "{:.2f}M".format(market_cap/1000000) }}
+                                                {% endif %}
+                                            </td>
+                                            <td>{{ "{:.2f}".format(data.info.get('trailingPE', 0)) if data.info.get('trailingPE') else 'N/A' }}</td>
+                                            <td>{{ "{:.2f}".format(data.info.get('forwardPE', 0)) if data.info.get('forwardPE') else 'N/A' }}</td>
+                                            <td>{{ "{:.2f}".format(data.info.get('pegRatio', 0)) if data.info.get('pegRatio') else 'N/A' }}</td>
+                                            <td>{{ "{:.2f}".format(data.info.get('priceToSalesTrailing12Months', 0)) if data.info.get('priceToSalesTrailing12Months') else 'N/A' }}</td>
+                                            <td>{{ "{:.2f}".format(data.info.get('priceToBook', 0)) if data.info.get('priceToBook') else 'N/A' }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Financials Tab -->
+                    <div class="tab-pane" id="financials">
+                        <h3><i class="fas fa-file-invoice-dollar"></i> Financial Metrics Comparison</h3>
+                        
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Stock</th>
+                                        <th>Profit Margin</th>
+                                        <th>Operating Margin</th>
+                                        <th>ROE</th>
+                                        <th>ROA</th>
+                                        <th>Debt to Equity</th>
+                                        <th>Current Ratio</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for ticker, data in stock_data.items() %}
+                                        <tr class="fadeIn" style="animation-delay: {{ loop.index0 * 0.05 }}s">
+                                            <td>{{ data.name }}</td>
+                                            <td>{{ "{:.2f}%".format(data.info.get('profitMargins', 0) * 100) if data.info.get('profitMargins') else 'N/A' }}</td>
+                                            <td>{{ "{:.2f}%".format(data.info.get('operatingMargins', 0) * 100) if data.info.get('operatingMargins') else 'N/A' }}</td>
+                                            <td>{{ "{:.2f}%".format(data.info.get('returnOnEquity', 0) * 100) if data.info.get('returnOnEquity') else 'N/A' }}</td>
+                                            <td>{{ "{:.2f}%".format(data.info.get('returnOnAssets', 0) * 100) if data.info.get('returnOnAssets') else 'N/A' }}</td>
+                                            <td>{{ "{:.2f}".format(data.info.get('debtToEquity', 0)) if data.info.get('debtToEquity') else 'N/A' }}</td>
+                                            <td>{{ "{:.2f}".format(data.info.get('currentRatio', 0)) if data.info.get('currentRatio') else 'N/A' }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Technical Tab -->
+                    <div class="tab-pane" id="technical">
+                        <h3><i class="fas fa-chart-area"></i> Technical Indicators</h3>
+                        
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Stock</th>
+                                        <th>Current Price</th>
+                                        <th>50-Day MA</th>
+                                        <th>200-Day MA</th>
+                                        <th>RSI (14)</th>
+                                        <th>MACD</th>
+                                        <th>Signal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for ticker, data in stock_data.items() %}
+                                        <tr class="fadeIn" style="animation-delay: {{ loop.index0 * 0.05 }}s">
+                                            <td>{{ data.name }}</td>
+                                            <td>₹{{ data.data[-1].price }}</td>
+                                            <td>
+                                                {% set ma50 = data.info.get('fiftyDayAverage', 0) %}
+                                                {% if ma50 %}
+                                                    ₹{{ "{:.2f}".format(ma50) }}
+                                                    {% if data.data[-1].price > ma50 %}
+                                                        <span class="positive">(Above)</span>
+                                                    {% else %}
+                                                        <span class="negative">(Below)</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    N/A
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% set ma200 = data.info.get('twoHundredDayAverage', 0) %}
+                                                {% if ma200 %}
+                                                    ₹{{ "{:.2f}".format(ma200) }}
+                                                    {% if data.data[-1].price > ma200 %}
+                                                        <span class="positive">(Above)</span>
+                                                    {% else %}
+                                                        <span class="negative">(Below)</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    N/A
+                                                {% endif %}
+                                            </td>
+                                            <td>N/A</td>
+                                            <td>N/A</td>
+                                            <td>
+                                                {% if ma50 and ma200 %}
+                                                    {% if ma50 > ma200 %}
+                                                        <span class="positive">Bullish</span>
+                                                    {% else %}
+                                                        <span class="negative">Bearish</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    N/A
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="ai-analysis-section">
+                <h3><i class="fas fa-brain"></i> AI Comparison Analysis</h3>
+                <button id="generateComparisonBtn" class="button button-primary">
+                    <i class="fas fa-magic"></i> Generate Comparison Analysis
+                </button>
+                <div id="aiAnalysisResult" class="ai-analysis-result" style="display: none;"></div>
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <i class="fas fa-search fa-3x"></i>
+                <p>Select stocks to compare and analyze.</p>
+                <div class="search-suggestions">
+                    <p>Try comparing popular stocks like:</p>
+                    <div class="suggestion-buttons">
+                        <a href="{{ url_for('screener', stocks=['RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS']) }}" class="suggestion-button">Top 3 Nifty Stocks</a>
+                        <a href="{{ url_for('screener', stocks=['TCS.NS', 'INFY.NS', 'WIPRO.NS']) }}" class="suggestion-button">IT Companies</a>
+                        <a href="{{ url_for('screener', stocks=['HDFCBANK.NS', 'ICICIBANK.NS', 'SBIN.NS']) }}" class="suggestion-button">Banking Stocks</a>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize Plotly chart if available
+        const chartElement = document.getElementById('performanceChart');
+        if (chartElement && chartElement.dataset.chart) {
+            const chartData = JSON.parse(chartElement.dataset.chart);
+            Plotly.newPlot('performanceChart', chartData.data, chartData.layout);
+        }
+        
+        // Tab functionality
+        const tabItems = document.querySelectorAll('.tab-item');
+        const tabPanes = document.querySelectorAll('.tab-pane');
+        
+        tabItems.forEach(item => {
+            item.addEventListener('click', function() {
+                // Remove active class from all tabs
+                tabItems.forEach(tab => tab.classList.remove('active'));
+                tabPanes.forEach(pane => pane.classList.remove('active'));
+                
+                // Add active class to clicked tab
+                this.classList.add('active');
+                
+                // Show corresponding tab pane
+                const tabId = this.getAttribute('data-tab');
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
+        
+        // AI Analysis button
+        const generateComparisonBtn = document.getElementById('generateComparisonBtn');
+        const aiAnalysisResult = document.getElementById('aiAnalysisResult');
+        
+        if (generateComparisonBtn) {
+            generateComparisonBtn.addEventListener('click', function() {
+                // Show loading state
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating Analysis...';
+                aiAnalysisResult.innerHTML = '<div class="loading-indicator">Analyzing stocks... This may take a moment.</div>';
+                aiAnalysisResult.style.display = 'block';
+                
+                // Get selected stocks
+                const selectedStocks = Array.from(document.getElementById('stockSelect').selectedOptions).map(option => option.value);
+                
+                if (selectedStocks.length === 0) {
+                    // Reset button
+                    generateComparisonBtn.disabled = false;
+                    generateComparisonBtn.innerHTML = '<i class="fas fa-magic"></i> Generate Comparison Analysis';
+                    
+                    // Display error
+                    aiAnalysisResult.innerHTML = '<div class="error-message"><i class="fas fa-exclamation-circle"></i> Please select at least one stock to analyze.</div>';
+                    return;
+                }
+                
+                // Generate analysis
+                fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: `Compare these stocks: ${selectedStocks.join(', ')}. Provide a detailed comparison including valuation metrics, financial health, technical indicators, and which stock might be the best investment currently.`
+                    }),
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Reset button
+                    generateComparisonBtn.disabled = false;
+                    generateComparisonBtn.innerHTML = '<i class="fas fa-magic"></i> Generate Comparison Analysis';
+                    
+                    // Display analysis
+                    if (data.success) {
+                        aiAnalysisResult.innerHTML = data.response;
+                        aiAnalysisResult.classList.add('comprehensive-analysis');
+                        aiAnalysisResult.classList.add('fadeIn');
+                    } else {
+                        aiAnalysisResult.innerHTML = `<div class="error-message"><i class="fas fa-exclamation-circle"></i> Error: ${data.response}</div>`;
+                    }
+                })
+                .catch(error => {
+                    // Reset button
+                    generateComparisonBtn.disabled = false;
+                    generateComparisonBtn.innerHTML = '<i class="fas fa-magic"></i> Generate Comparison Analysis';
+                    
+                    // Display error
+                    aiAnalysisResult.innerHTML = '<div class="error-message"><i class="fas fa-exclamation-circle"></i> Error generating analysis. Please try again later. The AI service might be temporarily unavailable.</div>';
+                    console.error('Error:', error);
+                });
+            });
+        }
+    });
+</script>
+{% endblock %}
